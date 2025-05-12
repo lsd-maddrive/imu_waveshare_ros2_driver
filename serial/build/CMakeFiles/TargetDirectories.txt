@@ -1,0 +1,10 @@
+/home/rei/Downloads/10_DOF_ROS_IMU_(A)_Code/ros_example_code/serial/build/CMakeFiles/uninstall.dir
+/home/rei/Downloads/10_DOF_ROS_IMU_(A)_Code/ros_example_code/serial/build/CMakeFiles/serial_uninstall.dir
+/home/rei/Downloads/10_DOF_ROS_IMU_(A)_Code/ros_example_code/serial/build/CMakeFiles/serial.dir
+/home/rei/Downloads/10_DOF_ROS_IMU_(A)_Code/ros_example_code/serial/build/CMakeFiles/test.dir
+/home/rei/Downloads/10_DOF_ROS_IMU_(A)_Code/ros_example_code/serial/build/CMakeFiles/edit_cache.dir
+/home/rei/Downloads/10_DOF_ROS_IMU_(A)_Code/ros_example_code/serial/build/CMakeFiles/rebuild_cache.dir
+/home/rei/Downloads/10_DOF_ROS_IMU_(A)_Code/ros_example_code/serial/build/CMakeFiles/list_install_components.dir
+/home/rei/Downloads/10_DOF_ROS_IMU_(A)_Code/ros_example_code/serial/build/CMakeFiles/install.dir
+/home/rei/Downloads/10_DOF_ROS_IMU_(A)_Code/ros_example_code/serial/build/CMakeFiles/install/local.dir
+/home/rei/Downloads/10_DOF_ROS_IMU_(A)_Code/ros_example_code/serial/build/CMakeFiles/install/strip.dir
