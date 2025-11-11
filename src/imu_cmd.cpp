@@ -705,87 +705,125 @@ static void Cmd_RxUnpack(U8 *buf, U8 DLen)
         //Dbp("\t product model: %s\r\n", &buf[27]); // Bytes[26-32] Product model string
         break;
     case 0x11: // Get subscribed functional data Reply or proactively report
+    {
+        sensor_msgs::msg::Imu imu_data;
+        imu_data.header.stamp = rclcpp::Clock().now();
+        imu_data.header.frame_id = "base_imu_link";
+
+        U16 ctl = ((U16)buf[2] << 8) | buf[1];  // Function subscription tag
+        U8 L = 7;  // Start parsing from byte 7
+
+        F32 tmpX, tmpY, tmpZ, tmpAbs;
+
+        // --- Initialize covariance matrices to zero (optional, but clean) ---
+        std::fill(imu_data.orientation_covariance.begin(), imu_data.orientation_covariance.end(), 0.0);
+        std::fill(imu_data.angular_velocity_covariance.begin(), imu_data.angular_velocity_covariance.end(), 0.0);
+        std::fill(imu_data.linear_acceleration_covariance.begin(), imu_data.linear_acceleration_covariance.end(), 0.0);
+
+        if ((ctl & 0x0001) != 0)
         {
-            sensor_msgs::msg::Imu imu_data;//IMU data to publish
-            imu_data.header.stamp = rclcpp::Clock().now();
-            imu_data.header.frame_id = "base_imu_link";
-            
-            ctl = ((U16)buf[2] << 8) | buf[1];// Byte [2-1] is the function subscription identifier, indicating which functions are currently subscribed.
-            //Dbp("\t subscribe tag: 0x%04X\r\n", ctl);
-            //Dbp("\t ms: %u\r\n", (U32)(((U32)buf[6]<<24) | ((U32)buf[5]<<16) | ((U32)buf[4]<<8) | ((U32)buf[3]<<0))); // Bytes[6-3] is the timestamp after the module is powered on (unit: ms)
-
-            L =7; // Starting from the 7th byte, the remaining data is parsed according to the subscription identification tag.
-            if ((ctl & 0x0001) != 0)
-            {// Acceleration xyz removes gravity and requires *scaleAccel m/s when used
-                tmpX = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleAccel; L += 2; //Dbp("\taX: %.3f\r\n", tmpX); //  Acceleration ax without gravity
-                tmpY = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleAccel; L += 2; //Dbp("\taY: %.3f\r\n", tmpY); // Acceleration ay without gravity
-                tmpZ = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleAccel; L += 2; //Dbp("\taZ: %.3f\r\n", tmpZ); // Acceleration az without gravity
-                tmpAbs = sqrt(pow2(tmpX) + pow2(tmpY) + pow2(tmpZ)); //Dbp("\ta_abs: %.3f\r\n", tmpAbs); // Absolute value of 3-axis composite
-                //imu_data.linear_acceleration.x = tmpX;
-                //imu_data.linear_acceleration.y = tmpY;
-                //imu_data.linear_acceleration.z = tmpZ;
-            }
-            if ((ctl & 0x0002) != 0)
-            {// Acceleration xyz includes gravity. *scaleAccel m/s is required when using it.
-                tmpX = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleAccel; L += 2; //Dbp("\tAX: %.3f\r\n", tmpX); // Acceleration AX with gravity
-                tmpY = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleAccel; L += 2; //Dbp("\tAY: %.3f\r\n", tmpY); // Acceleration AY with gravity
-                tmpZ = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleAccel; L += 2; //Dbp("\tAZ: %.3f\r\n", tmpZ); // Acceleration AZ with gravity
-                tmpAbs = sqrt(pow2(tmpX) + pow2(tmpY) + pow2(tmpZ)); //Dbp("\tA_abs: %.3f\r\n", tmpAbs); // Absolute value of 3-axis composite
-                imu_data.linear_acceleration.x = tmpX;
-                imu_data.linear_acceleration.y = tmpY;
-                imu_data.linear_acceleration.z = tmpZ;
-            }
-            if ((ctl & 0x0004) != 0)
-            {// Angular velocity xyz requires *scaleAngleSpeed ​​rad/s when used
-                tmpX = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleAngleSpeed; L += 2; //Dbp("\tGX: %.3f\r\n", tmpX); // Angular velocity GX
-                tmpY = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleAngleSpeed; L += 2; //Dbp("\tGY: %.3f\r\n", tmpY); // Angular velocity GY
-                tmpZ = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleAngleSpeed; L += 2; //Dbp("\tGZ: %.3f\r\n", tmpZ); // Angular velocity GZ
-                tmpAbs = sqrt(pow2(tmpX) + pow2(tmpY) + pow2(tmpZ)); //Dbp("\tG_abs: %.3f\r\n", tmpAbs); // Absolute value of 3-axis composite
-                imu_data.angular_velocity.x = tmpX * 0.0174532925; // unit rad/s
-                imu_data.angular_velocity.y = tmpY * 0.0174532925; // unit rad/s
-                imu_data.angular_velocity.z = tmpZ * 0.0174532925; // unit rad/s
-            }
-            if ((ctl & 0x0008) != 0)
-            {// Magnetic field xyz requires *scaleMag uT when using it
-                tmpX = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleMag; L += 2; //Dbp("\tCX: %.3f\r\n", tmpX); // Magnetic field data CX
-                tmpY = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleMag; L += 2; //Dbp("\tCY: %.3f\r\n", tmpY); // Magnetic field data CY
-                tmpZ = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleMag; L += 2; //Dbp("\tCZ: %.3f\r\n", tmpZ); // Magnetic field data CZ
-                tmpAbs = sqrt(pow2(tmpX) + pow2(tmpY) + pow2(tmpZ)); //Dbp("\tC_abs: %.3f\r\n", tmpAbs); // Absolute value of 3-axis composite
-            }
-            if ((ctl & 0x0010) != 0)
-            {// temperature air pressure altitude
-                tmpX = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleTemperature; L += 2; //Dbp("\ttemperature: %.2f\r\n", tmpX); // temperature
-
-                tmpU32 = (U32)(((U32)buf[L+2] << 16) | ((U32)buf[L+1] << 8) | (U32)buf[L]);
-                tmpU32 = ((tmpU32 & 0x800000) == 0x800000)? (tmpU32 | 0xff000000) : tmpU32;// If the highest bit of the 24-digit number is 1, the value is a negative number and needs to be converted to a 32-bit negative number, just add ff directly.
-                tmpY = (S32)tmpU32 * scaleAirPressure; L += 3; //Dbp("\tairPressure: %.3f\r\n", tmpY); // air pressure
-
-                tmpU32 = (U32)(((U32)buf[L+2] << 16) | ((U32)buf[L+1] << 8) | (U32)buf[L]);
-                tmpU32 = ((tmpU32 & 0x800000) == 0x800000)? (tmpU32 | 0xff000000) : tmpU32;// If the highest bit of the 24-digit number is 1, the value is a negative number and needs to be converted to a 32-bit negative number, just add ff directly.
-                tmpZ = (S32)tmpU32 * scaleHeight; L += 3; //Dbp("\theight: %.3f\r\n", tmpZ); // high
-            }
-            if ((ctl & 0x0020) != 0)
-            {// *scaleQuat is required when using the four-element wxyz
-                tmpAbs = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleQuat; L += 2; //Dbp("\tw: %.3f\r\n", tmpAbs); // Quaternions w
-                tmpX =   (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleQuat; L += 2; //Dbp("\tx: %.3f\r\n", tmpX); // Quaternions x
-                tmpY =   (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleQuat; L += 2; //Dbp("\ty: %.3f\r\n", tmpY); // Quaternions y
-                tmpZ =   (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleQuat; L += 2; //Dbp("\tz: %.3f\r\n", tmpZ); // Quaternions z
-                imu_data.orientation.x = tmpX;
-                imu_data.orientation.y = tmpY;
-                imu_data.orientation.z = tmpZ;
-                imu_data.orientation.w = tmpAbs;
-            }
-            if ((ctl & 0x0040) != 0)
-            {// Euler angle xyz requires *scaleAngle when using it
-                tmpX = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleAngle; L += 2; //Dbp("\tangleX: %.3f\r\n", tmpX); // Euler angles x
-                tmpY = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleAngle; L += 2; //Dbp("\tangleY: %.3f\r\n", tmpY); // Euler angles Y
-                tmpZ = (S16)(((S16)buf[L+1]<<8) | buf[L]) * scaleAngle; L += 2; //Dbp("\tangleZ: %.3f\r\n", tmpZ); // Euler angles Z
-            }
-
-            extern rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imuMsg_pub;
-            imuMsg_pub->publish(imu_data);//Post topic
+            // Acceleration xyz without gravity (m/s²)
+            tmpX = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleAccel; L += 2;
+            tmpY = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleAccel; L += 2;
+            tmpZ = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleAccel; L += 2;
+            tmpAbs = sqrt(tmpX*tmpX + tmpY*tmpY + tmpZ*tmpZ);
+            // Note: Not publishing this (as per original comment)
         }
-        break;
+
+        if ((ctl & 0x0002) != 0)
+        {
+            // Acceleration xyz with gravity (m/s²) → publish to linear_acceleration
+            tmpX = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleAccel; L += 2;
+            tmpY = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleAccel; L += 2;
+            tmpZ = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleAccel; L += 2;
+            tmpAbs = sqrt(tmpX*tmpX + tmpY*tmpY + tmpZ*tmpZ);
+
+            imu_data.linear_acceleration.x = tmpX;
+            imu_data.linear_acceleration.y = tmpY;
+            imu_data.linear_acceleration.z = tmpZ;
+
+            // --- Set linear acceleration covariance  ---
+            // Diagonal matrix: variance per axis (adjust based on sensor specs)
+            imu_data.linear_acceleration_covariance[0] = 0.04;  // x variance
+            imu_data.linear_acceleration_covariance[4] = 0.04;  // y variance
+            imu_data.linear_acceleration_covariance[8] = 0.04;  // z variance
+            // Off-diagonal elements remain 0 (no correlation assumed)
+        }
+
+        if ((ctl & 0x0004) != 0)
+        {
+            // Angular velocity xyz (raw scaled) → convert to rad/s
+            F32 gx = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleAngleSpeed; L += 2;
+            F32 gy = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleAngleSpeed; L += 2;
+            F32 gz = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleAngleSpeed; L += 2;
+            tmpAbs = sqrt(gx*gx + gy*gy + gz*gz);
+
+            // Convert from deg/s to rad/s
+            imu_data.angular_velocity.x = gx * 0.0174532925f;
+            imu_data.angular_velocity.y = gy * 0.0174532925f;
+            imu_data.angular_velocity.z = gz * 0.0174532925f;
+
+            // --- Set angular velocity covariance ---
+            imu_data.angular_velocity_covariance[0] = 0.01;  // x variance
+            imu_data.angular_velocity_covariance[4] = 0.01;  // y variance
+            imu_data.angular_velocity_covariance[8] = 0.01;  // z variance
+        }
+
+        if ((ctl & 0x0008) != 0)
+        {
+            // Magnetic field (uT) — not used in Imu message
+            tmpX = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleMag; L += 2;
+            tmpY = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleMag; L += 2;
+            tmpZ = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleMag; L += 2;
+            tmpAbs = sqrt(tmpX*tmpX + tmpY*tmpY + tmpZ*tmpZ);
+        }
+
+        if ((ctl & 0x0010) != 0)
+        {
+            // Temperature, air pressure, altitude — not in Imu message
+            tmpX = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleTemperature; L += 2;
+
+            U32 tmpU32 = ((U32)buf[L+2] << 16) | ((U32)buf[L+1] << 8) | buf[L];
+            tmpU32 = (tmpU32 & 0x800000) ? (tmpU32 | 0xFF000000) : tmpU32;
+            tmpY = (S32)tmpU32 * scaleAirPressure; L += 3;
+
+            tmpU32 = ((U32)buf[L+2] << 16) | ((U32)buf[L+1] << 8) | buf[L];
+            tmpU32 = (tmpU32 & 0x800000) ? (tmpU32 | 0xFF000000) : tmpU32;
+            tmpZ = (S32)tmpU32 * scaleHeight; L += 3;
+        }
+
+        if ((ctl & 0x0020) != 0)
+        {
+            // Quaternion wxyz
+            F32 w = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleQuat; L += 2;
+            tmpX  = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleQuat; L += 2;
+            tmpY  = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleQuat; L += 2;
+            tmpZ  = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleQuat; L += 2;
+
+            imu_data.orientation.w = w;
+            imu_data.orientation.x = tmpX;
+            imu_data.orientation.y = tmpY;
+            imu_data.orientation.z = tmpZ;
+
+            // --- Set orientation covariance ---
+            imu_data.orientation_covariance[0] = 0.02;  // x variance
+            imu_data.orientation_covariance[4] = 0.02;  // y variance
+            imu_data.orientation_covariance[8] = 0.02;  // z variance
+        }
+
+        if ((ctl & 0x0040) != 0)
+        {
+            // Euler angles (not used in Imu message, but parsed)
+            tmpX = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleAngle; L += 2;
+            tmpY = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleAngle; L += 2;
+            tmpZ = (S16)(((S16)buf[L+1] << 8) | buf[L]) * scaleAngle; L += 2;
+        }
+
+        // --- Publish the IMU message ---
+        extern rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imuMsg_pub;
+        imuMsg_pub->publish(imu_data);
+    }
+    break;
     case 0x12: // Set parameters Reply
         Dbp("\t set parameters success\r\n");
         break;
